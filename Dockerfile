@@ -1,9 +1,23 @@
-FROM debian:sid
+FROM caddy:builder-alpine AS builder
 
-RUN apt update -y \
-    	&& apt upgrade -y \
-    	&& apt install -y wget unzip qrencode
+RUN xcaddy build \
+        --with github.com/mholt/caddy-l4 \
+        --with github.com/mholt/caddy-dynamicdns \
+        --with github.com/caddy-dns/cloudflare
 
-ADD entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-CMD /entrypoint.sh
+FROM caddy:builder-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+
+RUN apk update && \
+    apk add --no-cache --virtual ca-certificates caddy tor curl openntpd \
+    && rm -rf /var/cache/apk/*
+
+ENV XDG_CONFIG_HOME /etc/caddy
+ENV XDG_DATA_HOME /usr/share/caddy
+
+COPY etc/Caddyfile /conf/Caddyfile
+COPY etc/config.json /conf/config.json
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD /start.sh
